@@ -1,0 +1,9 @@
+out/
+simulations/
+.nedfolders
+.cproject
+.nedexclusions
+.settings/
+.project
+.oppbuildspec
+src/*.exe
