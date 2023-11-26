@@ -17,8 +17,26 @@
 #define UTIL_H_
 
 #include <fstream>
+#include <stdio.h>
 #include <vector>
 #include <bitset>
+
+typedef std::bitset<8> bitset8;
+typedef std::vector<bitset8> vecBitset8;
+
+class Info {
+public:
+    Info() = delete;
+    static int windowSize;
+    static double timeout;
+    static double processingTime;
+    static double transmissionDelay;
+    static double errorDelay;
+    static double duplicationDelay;
+    static double ackLossProb;
+
+    static std::FILE* log;
+};
 
 class TextFile {
     std::string fileName;
@@ -33,9 +51,9 @@ public:
 };
 
 
-std::vector<std::bitset<8>> ConvertStringToBits(std::string const& message);
-std::string ConvertBitsToString(std::vector<std::bitset<8>> const& bytes);
-bool VerifyChecksum(std::vector<std::bitset<8>> const &bytes, std::bitset<8> const& checksum);
-std::bitset<8> CalculateChecksum(std::vector<std::bitset<8>> const &bytes);
+vecBitset8 ConvertStringToBits(std::string const& message, bool frame = false);
+std::string ConvertBitsToString(vecBitset8 const& bytes, bool deframe = false);
+bool VerifyChecksum(vecBitset8 const &bytes, bitset8 const& checksum);
+bitset8 CalculateChecksum(vecBitset8 const &bytes);
 
 #endif /* UTIL_H_ */

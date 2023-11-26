@@ -29,17 +29,16 @@ class Node : public cSimpleModule
     virtual void initialize();
     virtual void handleMessage(cMessage *msg);
     virtual void getInitializationInfo(CustomMessage_Base* msg);
+    virtual void sender(CustomMessage_Base *msg);
+    virtual void receiver(CustomMessage_Base *msg);
 
   private:
     int id;
     TextFile *input;
-    bool sender = false;
+    bool isSender = false;
     float startingTime;
 
-    // Window-related: window start, window end
-    // wEnd is initialized in Node::initialize() with the correct value of
-    // the window size parameter.
-    int wStart = 0, wEnd;
+    int wCurrent = 0;
     int currentLineOffset = 0;
 
 };

@@ -29,6 +29,7 @@ class Coordinator : public cSimpleModule
   protected:
     virtual void initialize();
     virtual void handleMessage(cMessage *msg);
+    virtual void setGlobalInfo();
     std::ifstream coordinatorFile;
     int startingNodeID;
     float startingTime;

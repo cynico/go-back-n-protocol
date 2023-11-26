@@ -20,6 +20,8 @@
 
 // cplusplus {{
 #include <string>
+#include <vector>
+#include <bitset>
 // }}
 
 /**
@@ -70,8 +72,8 @@ class CustomMessage_Base : public ::omnetpp::cPacket
 {
   protected:
     int dataSequence;
-    std::string payload;
-    char parity;
+    std::vector<std::bitset<8>> payload;
+    std::bitset<8> parity;
     char frameType;
     int ackSequence;
 
@@ -98,10 +100,10 @@ class CustomMessage_Base : public ::omnetpp::cPacket
     // field getter/setter methods
     virtual int getDataSequence() const;
     virtual void setDataSequence(int dataSequence);
-    virtual const char * getPayload() const;
-    virtual void setPayload(std::string payload);
-    virtual char getParity() const;
-    virtual void setParity(char parity);
+    virtual const std::vector<std::bitset<8>>* getPayload() const;
+    virtual void setPayload(std::vector<std::bitset<8>>const &payload);
+    virtual std::bitset<8> getParity() const;
+    virtual void setParity(std::bitset<8> parity);
     virtual char getFrameType() const;
     virtual void setFrameType(char frameType);
     virtual int getAckSequence() const;

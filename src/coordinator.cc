@@ -15,10 +15,29 @@
 
 #include "coordinator.h"
 #include "CustomMessage_m.h"
+#include "util.h"
 Define_Module(Coordinator);
+
+void Coordinator::setGlobalInfo()
+{
+    // Set shared info according to parameters
+    Info::windowSize = (int)getParentModule()->par("WS");
+    Info::timeout = getParentModule()->par("TO").doubleValue();
+    Info::processingTime = getParentModule()->par("PT").doubleValue();
+    Info::transmissionDelay = getParentModule()->par("TD").doubleValue();
+    Info::errorDelay = getParentModule()->par("ED").doubleValue();
+    Info::duplicationDelay = getParentModule()->par("DD").doubleValue();
+    Info::ackLossProb = getParentModule()->par("LP").doubleValue();
+
+    Info::log = std::fopen("..\\log.txt", "w");
+    if (!Info::log)
+        throw std::runtime_error("Error opening log file.");
+}
 
 void Coordinator::initialize()
 {
+    this->setGlobalInfo();
+
     // Opening coordinator file and reading starting info.
     coordinatorFile.open("..\\src\\coordinator.txt");
     if (!coordinatorFile.good()) {
@@ -32,7 +51,7 @@ void Coordinator::initialize()
 
     // Sending the starting info the the nodes
     CustomMessage_Base *initMsg = new CustomMessage_Base();
-    initMsg->setPayload(line);
+    initMsg->setPayload(ConvertStringToBits(line));
     initMsg->setFrameType(COORDINATOR_FRAME);
     send(initMsg, "node0$o");
     send(initMsg->dup(), "node1$o");

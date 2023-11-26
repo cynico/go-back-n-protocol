@@ -180,7 +180,7 @@ inline std::ostream& operator<<(std::ostream& out, const std::vector<T,A>& vec)
 CustomMessage_Base::CustomMessage_Base(const char *name, short kind) : ::omnetpp::cPacket(name,kind)
 {
     this->dataSequence = 0;
-    this->parity = 0;
+    this->parity.reset();
     this->frameType = 0;
     this->ackSequence = 0;
 }
@@ -206,7 +206,7 @@ void CustomMessage_Base::copy(const CustomMessage_Base& other)
 {
     this->dataSequence = other.dataSequence;
     this->payload = other.payload;
-    this->parity = other.parity;
+    this->parity = std::bitset<8>(other.parity);
     this->frameType = other.frameType;
     this->ackSequence = other.ackSequence;
 }
@@ -241,24 +241,24 @@ void CustomMessage_Base::setDataSequence(int dataSequence)
     this->dataSequence = dataSequence;
 }
 
-const char * CustomMessage_Base::getPayload() const
+const std::vector<std::bitset<8>>* CustomMessage_Base::getPayload() const
 {
-    return this->payload.c_str();
+    return &(this->payload);
 }
 
-void CustomMessage_Base::setPayload(std::string payload)
+void CustomMessage_Base::setPayload(std::vector<std::bitset<8>>const &payload)
 {
     this->payload = payload;
 }
 
-char CustomMessage_Base::getParity() const
+std::bitset<8> CustomMessage_Base::getParity() const
 {
     return this->parity;
 }
 
-void CustomMessage_Base::setParity(char parity)
+void CustomMessage_Base::setParity(std::bitset<8> parity)
 {
-    this->parity = parity;
+    this->parity = std::bitset<8>(parity);
 }
 
 char CustomMessage_Base::getFrameType() const
@@ -481,8 +481,13 @@ std::string CustomMessageDescriptor::getFieldValueAsString(void *object, int fie
     CustomMessage_Base *pp = (CustomMessage_Base *)object; (void)pp;
     switch (field) {
         case 0: return long2string(pp->getDataSequence());
-        case 1: return oppstring2string(pp->getPayload());
-        case 2: return long2string(pp->getParity());
+        case 1: {
+            std::string message = "";
+            for (auto &v: *pp->getPayload())
+                message += v.to_string();
+            return message;
+        }
+        case 2: return pp->getParity().to_string();
         case 3: return long2string(pp->getFrameType());
         case 4: return long2string(pp->getAckSequence());
         default: return "";
@@ -500,8 +505,8 @@ bool CustomMessageDescriptor::setFieldValueAsString(void *object, int field, int
     CustomMessage_Base *pp = (CustomMessage_Base *)object; (void)pp;
     switch (field) {
         case 0: pp->setDataSequence(string2long(value)); return true;
-        case 1: pp->setPayload((value)); return true;
-        case 2: pp->setParity(string2long(value)); return true;
+        // case 1: pp->setPayload((value)); return true;
+        case 2: pp->setParity(std::bitset<8>(value)); return true;
         case 3: pp->setFrameType(string2long(value)); return true;
         case 4: pp->setAckSequence(string2long(value)); return true;
         default: return false;
