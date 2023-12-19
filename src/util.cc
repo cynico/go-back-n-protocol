@@ -24,34 +24,36 @@ double Info::transmissionDelay = 0;
 double Info::errorDelay = 0;
 double Info::duplicationDelay = 0;
 double Info::ackLossProb = 0;
-std::FILE* Info::log;
+std::ofstream Info::log;
 
 
-TextFile::TextFile(std::string fileName) : file_stream(fileName), fileName(fileName)
+TextFile::TextFile(std::string fileName) : fileName(fileName)
 {
-    if (!file_stream.good())
-        throw std::runtime_error("Error opening the file: " + fileName);
+}
+
+void TextFile::OpenFile()  {
+    this->file_stream.open(this->fileName, std::ios::binary);
+    if (!this->file_stream.good())
+        throw std::runtime_error("Error opening the file: " + this->fileName);
 
     std::string s;
-    s.reserve(256);
-
-    while(file_stream) {
-        lineBeginnings.push_back(file_stream.tellg());
+    lineBeginnings.push_back(file_stream.tellg());
+    while (file_stream) {
         std::getline(file_stream, s);
+        if (s.empty()) continue; // To handle files that has an empty last line
+        lineBeginnings.push_back(file_stream.tellg());
     }
 }
 
-std::string TextFile::ReadNthLine(int N) {
+bool TextFile::ReadNthLine(int N, std::string &s) {
     if (N >= lineBeginnings.size()-1)
-        throw std::runtime_error("File " + this->fileName + " doesn't have that many lines.");
-
-    std::string s;
+        return false;
 
     // Clear EOF and error flags
-    file_stream.clear();
-    file_stream.seekg(lineBeginnings[N]);
-    std::getline(file_stream, s);
-    return s;
+    this->file_stream.clear();
+    this->file_stream.seekg(lineBeginnings[N]);
+    std::getline(this->file_stream, s);
+    return true;
 }
 
 TextFile::TextFile() {

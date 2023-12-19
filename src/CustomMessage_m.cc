@@ -261,12 +261,12 @@ void CustomMessage_Base::setParity(std::bitset<8> parity)
     this->parity = std::bitset<8>(parity);
 }
 
-char CustomMessage_Base::getFrameType() const
+int CustomMessage_Base::getFrameType() const
 {
     return this->frameType;
 }
 
-void CustomMessage_Base::setFrameType(char frameType)
+void CustomMessage_Base::setFrameType(int frameType)
 {
     this->frameType = frameType;
 }

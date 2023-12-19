@@ -17,7 +17,6 @@
 #define UTIL_H_
 
 #include <fstream>
-#include <stdio.h>
 #include <vector>
 #include <bitset>
 
@@ -35,18 +34,19 @@ public:
     static double duplicationDelay;
     static double ackLossProb;
 
-    static std::FILE* log;
+    static std::ofstream log;
 };
 
 class TextFile {
     std::string fileName;
     std::ifstream file_stream;
-    std::vector<std::ifstream::streampos> lineBeginnings;
 public:
+    std::vector<std::ifstream::streampos> lineBeginnings;
     TextFile();
     TextFile(std::string fileName);
     TextFile(TextFile&& b);
-    std::string ReadNthLine(int N);
+    bool ReadNthLine(int N, std::string &s);
+    void OpenFile();
     virtual ~TextFile();
 };
 

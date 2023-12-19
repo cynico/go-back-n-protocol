@@ -13,7 +13,7 @@ network Network
         double TD = default(1.0);
         double ED = default(4.0);
         double DD = default(0.1);
-        double LP = default(0.0);
+        double LP = default(0.5);
         
     submodules:
         coordinator: Coordinator {

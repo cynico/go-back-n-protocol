@@ -74,7 +74,7 @@ class CustomMessage_Base : public ::omnetpp::cPacket
     int dataSequence;
     std::vector<std::bitset<8>> payload;
     std::bitset<8> parity;
-    char frameType;
+    int frameType;
     int ackSequence;
 
   private:
@@ -104,8 +104,8 @@ class CustomMessage_Base : public ::omnetpp::cPacket
     virtual void setPayload(std::vector<std::bitset<8>>const &payload);
     virtual std::bitset<8> getParity() const;
     virtual void setParity(std::bitset<8> parity);
-    virtual char getFrameType() const;
-    virtual void setFrameType(char frameType);
+    virtual int getFrameType() const;
+    virtual void setFrameType(int frameType);
     virtual int getAckSequence() const;
     virtual void setAckSequence(int ackSequence);
 };
