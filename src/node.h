@@ -53,11 +53,13 @@ class Node : public cSimpleModule
     virtual void receiver(CustomMessage_Base *msg);
     virtual void checkTermination();
     virtual bool sendDataFrame(int lineNumber, int dataSequenceNumber, bool errorFree, float &delay);
+    virtual void sendAck(int ACK_TYPE, bool LP = true);
     virtual int modulus(int a);
-    virtual void modifyPayload(vecBitset8 &payload);
+    virtual int modifyPayload(vecBitset8 &payload);
     virtual Timer* createTimer(int ackSequence);
     virtual Timer* deleteTimers(int ackSequence, bool prev);
     virtual void advanceWindowAndSendFrames(int ackSequence, bool prev);
+    template<typename... Args> void log(const char * f, Args... args);
   private:
     int id;
     TextFile *input;

@@ -29,7 +29,7 @@ void Coordinator::setGlobalInfo()
     Info::duplicationDelay = getParentModule()->par("DD").doubleValue();
     Info::ackLossProb = getParentModule()->par("LP").doubleValue();
 
-    Info::log.open("..\\log.txt");
+    Info::log.open("..\\output.txt");
     if (!Info::log.good())
         throw std::runtime_error("Error opening log file.");
 }

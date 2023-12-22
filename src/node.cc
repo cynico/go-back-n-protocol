@@ -14,7 +14,7 @@
 // 
 
 #include "node.h"
-#include <cstdio>
+#include <stdio.h>
 
 Define_Module(Node);
 
@@ -59,9 +59,10 @@ int Node::modulus(int a) {
     return ((a % b) + b) % b;
 }
 
-void Node::modifyPayload(vecBitset8 &payload) {
+int Node::modifyPayload(vecBitset8 &payload) {
     int bit = intuniform(0,payload.size()*8);
     payload[int(bit/8)][bit%8] = (~payload[int(bit/8)][bit%8]);
+    return bit;
 }
 
 bool Node::sendDataFrame(int lineNumber, int dataSequenceNumber, bool errorFree, float &delay) {
@@ -76,22 +77,51 @@ bool Node::sendDataFrame(int lineNumber, int dataSequenceNumber, bool errorFree,
     msgToSend->setParity(CalculateChecksum(payload));
     msgToSend->setDataSequence(dataSequenceNumber);
 
+    this->log("At time [%f], Node [%d], Introducing channel error with code = [%s]", simTime().dbl(), this->id, line.substr(0,4).c_str());
+
+    bool lost = false, duplicated = false;
+    int modifiedBit = -1;
+    float errorDelay = 0;
+
     // Applying errors..
     if (!errorFree) {
 
+        // Modification
         std::bitset<4> errorPrefix(line.substr(0, 4));
-        if (errorPrefix.test(3)) this->modifyPayload(payload);
-        if (errorPrefix.test(2)) {
-            delete msgToSend;
-            return true;
-        }
+        if (errorPrefix.test(3)) modifiedBit = this->modifyPayload(payload);
 
+        // Loss
+        lost = errorPrefix.test(2);
+
+        // Duplication
+        duplicated = errorPrefix.test(1);
+
+        // Delay
+        if (errorPrefix.test(0)) errorDelay = Info::errorDelay;
     }
 
-    msgToSend->setPayload(payload);
 
+    // Log output
+    this->log("At time [%f], Node [%d] sent frame with seq_num = [%d] and payload = [%s] and trailer = [%s], Modified = %d, Lost = %s, Duplicate = [%d], Delay = %f",
+            simTime().dbl() + Info::processingTime, this->id, dataSequenceNumber, ConvertBitsToString(payload).c_str(),
+            msgToSend->getParity().to_string().c_str(), modifiedBit, lost? "Yes": "No", (int)duplicated, errorDelay);
+
+    msgToSend->setPayload(payload);
     delay = Info::processingTime + Info::transmissionDelay;
-    sendDelayed(msgToSend, delay, "peer$o");
+
+    // If duplicated, send a duplicate message with the duplication delay.
+    if (duplicated) {
+        CustomMessage_Base* duplicatedMsg = msgToSend->dup();
+        this->log("At time [%f], Node [%d] sent frame with seq_num = [%d] and payload = [%s] and trailer = [%s], Modified = %d, Lost = %s, Duplicate = [%d], Delay = %f",
+                simTime().dbl() + Info::processingTime, this->id, dataSequenceNumber, ConvertBitsToString(payload).c_str(),
+                duplicatedMsg->getParity().to_string().c_str(), modifiedBit, lost? "Yes": "No", 2, errorDelay);
+        if (lost) delete duplicatedMsg;
+        else sendDelayed(duplicatedMsg, delay + Info::duplicationDelay + errorDelay, "peer$o");
+    }
+
+    if (lost) delete msgToSend;
+    else sendDelayed(msgToSend, delay + errorDelay, "peer$o");
+
     return true;
 }
 
@@ -170,11 +200,28 @@ void Node::advanceWindowAndSendFrames(int ackSequence, bool prev) {
     // Advancing wCurrent and sending new frames as much as our window can expand.
     float delay;
     bool errorFree = prev ? false : true; // errorFree is true for the first message to be sent in case of nack.
-    for (int i =  Info::windowSize - this->modulus(this->senderInfo.wCurrent - this->senderInfo.wStart); i > 0; i--) {
+
+    int framesToSend = Info::windowSize - this->modulus(this->senderInfo.wCurrent - this->senderInfo.wStart);
+
+    // Log output
+    if (prev)
+        this->log("At time [%f], Node [%d] received ack with seq_num = %d. Advancing window and sending %d frames.", simTime().dbl(), this->id,
+                ackSequence, framesToSend);
+    else
+        this->log("At time [%f], Node [%d] received nack with seq_num = %d. Resending %d frames, starting from sequence number = %d", simTime().dbl(), this->id,
+                ackSequence, framesToSend, this->senderInfo.wCurrent);
+
+
+    for (int i = framesToSend; i > 0; i--) {
 
         int lineNumber = this->senderInfo.currentLineOffset + this->modulus(this->senderInfo.wCurrent - this->senderInfo.wStart);
         int dataSequenceNumber = this->senderInfo.wCurrent;
-        if (!this->sendDataFrame(lineNumber, dataSequenceNumber, errorFree, delay)) return this->checkTermination();
+        if (!this->sendDataFrame(lineNumber, dataSequenceNumber, errorFree, delay)) {
+            this->log("At time [%f], Node [%d] found no more lines to send. Checking if we should terminate now", simTime().dbl(), this->id);
+            this->checkTermination();
+            this->log("At time [%f], Node [%d] is waiting for outstanding acks to terminate.", simTime().dbl(), this->id);
+            return;
+        }
 
         // Setting errorFree to false in case of nack.
         // Increasing the delay by 0.001 as per the document.
@@ -188,6 +235,8 @@ void Node::advanceWindowAndSendFrames(int ackSequence, bool prev) {
         scheduleAt( simTime() + delay + Info::timeout, timer->msg);
         this->senderInfo.wCurrent = this->modulus(this->senderInfo.wCurrent + 1);
     }
+
+    return;
 }
 
 void Node::sender(CustomMessage_Base *msg) {
@@ -197,12 +246,13 @@ void Node::sender(CustomMessage_Base *msg) {
     // within the window.
     if (msg->isSelfMessage()) {
 
-        std::cout << "A timer has expired. Sending all outstanding messages. Ack Sequence = " << msg->getAckSequence() << std::endl;
         int timedoutSequenceNumber = msg->getAckSequence();
+        this->log("At time [%f], Node [%d] timeout event for frame with seq_num = %d", simTime().dbl(), this->id, timedoutSequenceNumber);
 
-        // Cancel all timers
-        if (this->senderInfo.timers)
-            this->deleteTimers(this->senderInfo.timers->msg->getAckSequence(), false);
+        // Cancel all timers starting from the timer that expired and onwards, i.e: all timers.
+        // Clarification: if a timer expired, it MUST have been the first timer in the window, by the very
+        // structure of the way acknowledgements are serially handled in the code.
+        if (this->senderInfo.timers) this->deleteTimers(this->senderInfo.timers->msg->getAckSequence(), false);
 
         int dataSequenceNumber, lineNumber;
         float delay; bool errorFree = false;
@@ -211,7 +261,6 @@ void Node::sender(CustomMessage_Base *msg) {
             dataSequenceNumber =  this->modulus(this->senderInfo.wStart + i);
             lineNumber = this->senderInfo.currentLineOffset + i;
             errorFree = false;
-            std::cout << "dataSequenceNumber: " << dataSequenceNumber << " lineNumber: " << lineNumber << std::endl;
 
             // If this is the message that caused the timeout, then send it error-free.
             if (dataSequenceNumber == timedoutSequenceNumber) errorFree = true;
@@ -224,8 +273,6 @@ void Node::sender(CustomMessage_Base *msg) {
         }
 
         senderInfo.wCurrent = this->modulus(senderInfo.wStart + Info::windowSize);
-
-        cancelAndDelete(msg);
     }
 
     // We received an ACK or NACK.
@@ -233,13 +280,11 @@ void Node::sender(CustomMessage_Base *msg) {
         int sequenceNumber = msg->getAckSequence();
         switch (msg->getFrameType()) {
         case ACK_FRAME: {
-            std::cout << "Received ack = " << sequenceNumber << std::endl;
             this->advanceWindowAndSendFrames(sequenceNumber, true);
             break;
         }
 
         case NACK_FRAME: {
-            std::cout << "Received nack = " << sequenceNumber << std::endl;
             this->senderInfo.wCurrent = sequenceNumber;
             this->advanceWindowAndSendFrames(sequenceNumber, false);
             break;
@@ -247,42 +292,52 @@ void Node::sender(CustomMessage_Base *msg) {
 
         default: break;
         }
-    }
 
-    // cancelAndDelete(msg);
+        cancelAndDelete(msg);
+    }
 }
 
+template<typename... Args> void Node::log(const char * f, Args... args) {
+
+    char buffer[1024];
+    if (snprintf(buffer, 1024, f, args...) < 0) std::cerr << "Error formatting buffer" << std::endl;
+
+    Info::log << buffer << std::endl;
+    Info::log.flush();
+
+    EV << buffer << std::endl;
+}
 
 void Node::checkTermination() {
     if (this->senderInfo.wStart == this->senderInfo.wCurrent) {
-        std::cout << "Finishing operation" << std::endl;
+        this->log("At time [%f], Node [%d] finished sending and receiving acks.", simTime().dbl(), this->id);
         exit(0);
     }
 }
 
-void Node::sendAck(int ACK_TYPE, bool LP = true) {
+void Node::sendAck(int ACK_TYPE, bool LP) {
+
+    bool lost = false;
 
     CustomMessage_Base* ack = new CustomMessage_Base();
     ack->setFrameType(ACK_TYPE);
     ack->setAckSequence(this->receiverInfo.expectedFrameSequence);
 
-    // Apply the LP
-    if ((uniform(0,1) <= Info::ackLossProb) && LP) {
-        std::cerr << "Applying loss probability to " << (valid? "ack" : "nack") << " frame " << this->receiverInfo.expectedFrameSequence << std::endl;
-        delete ack;
-    }
-    else
-        sendDelayed(ack, Info::processingTime + Info::transmissionDelay, "peer$o");
+    if ((uniform(0,1) <= Info::ackLossProb) && LP) lost = true;
+    else sendDelayed(ack, Info::processingTime + Info::transmissionDelay, "peer$o");
 
+    this->log("At time [%f], Node [%d] sending %s with seq_num = %d, loss = %s", simTime().dbl() + Info::processingTime, this->id,
+            ACK_TYPE ? "ack" : "nack", ack->getAckSequence(), lost? "Yes" : "No");
+
+    if (lost) delete ack;
 }
 
 void Node::receiver(CustomMessage_Base *msg) {
 
-    CustomMessage_Base* ack = new CustomMessage_Base();
-
-    // TODO: If not an in-order message, drop and send an ack with the sequence of the next expected frame sequence.
+    // If not an in-order message, drop and send an ack with the sequence of the next expected frame sequence.
     if (msg->getDataSequence() != this->receiverInfo.expectedFrameSequence) {
-        std::cerr << "Dropping out-of-order frame " << msg->getDataSequence() << ". Sending ack with sequence: " << this->receiverInfo.expectedFrameSequence << std::endl;
+        this->log("At time [%f], Node [%d] dropped out-of-order frame with seq_num = %d. Expecting seq_num = %d", simTime().dbl(), this->id, msg->getDataSequence(), this->receiverInfo.expectedFrameSequence);
+        cancelAndDelete(msg);
         this->sendAck(ACK_FRAME, false);
         return;
     }
@@ -293,11 +348,10 @@ void Node::receiver(CustomMessage_Base *msg) {
     this->receiverInfo.expectedFrameSequence = this->modulus(this->receiverInfo.expectedFrameSequence);
 
     this->sendAck(int(valid));
-    if (valid) {
-        Info::log << "Uploading payload = \"" + ConvertBitsToString(*(msg->getPayload()), true) << "\" and seq_num = " << msg->getDataSequence() << " to the network layer\n" << std::endl;
-        Info::log.flush();
-    } else std::cerr << "Received errored frame. Sending NACK" << std::endl;
+    if (valid) this->log("Uploading payload = \"%s\" and seq_num = %d to the network layer", ConvertBitsToString(*(msg->getPayload()), true).c_str(), msg->getDataSequence());
 
+    cancelAndDelete(msg);
+    return;
 }
 
 void Node::handleMessage(cMessage *msg)
@@ -312,9 +366,7 @@ void Node::handleMessage(cMessage *msg)
     }
 
     // Call the appropriate function
-    if (this->isSender)
-        this->sender(customMsg);
-    else
-        this->receiver(customMsg);
+    if (this->isSender) this->sender(customMsg);
+    else this->receiver(customMsg);
 
 }
