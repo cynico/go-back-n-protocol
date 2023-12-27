@@ -125,12 +125,13 @@ bool Node::sendDataFrame(int lineNumber, int dataSequenceNumber, bool errorFree,
 
     // If duplicated, send a duplicate message with the duplication delay.
     if (duplicated) {
-        CustomMessage_Base* duplicatedMsg = msgToSend->dup();
         this->log("At time [%.3f], Node [%d] sent frame with seq_num = [%d] and payload = [%s] and trailer = [%s], Modified [%d], Lost [%s], Duplicate [%d], Delay [%.3f]",
                 simTime().dbl() + this->senderInfo.offsetFromRealTime, this->id, dataSequenceNumber, ConvertBitsToString(payload).c_str(),
-                duplicatedMsg->getParity().to_string().c_str(), modifiedBit, lost? "Yes": "No", 2, errorDelay);
-        if (lost) delete duplicatedMsg;
-        else sendDelayed(duplicatedMsg, delay + Info::duplicationDelay + errorDelay, "peer$o");
+                msgToSend->getParity().to_string().c_str(), modifiedBit, lost? "Yes": "No", 2, errorDelay);
+        if (!lost) {
+            CustomMessage_Base* duplicatedMsg = msgToSend->dup();
+            sendDelayed(duplicatedMsg, delay + Info::duplicationDelay + errorDelay, "peer$o");
+        }
     }
 
     if (lost) delete msgToSend;
@@ -374,7 +375,7 @@ void Node::handleMessage(cMessage *msg)
     CustomMessage_Base* customMsg = check_and_cast<CustomMessage_Base *>(msg);
 
     // If this is the (initial) coordinator message
-    if ((int)customMsg->getFrameType() == 3) {
+    if ((int)customMsg->getFrameType() == COORDINATOR_FRAME) {
         getInitializationInfo(customMsg);
         cancelAndDelete(msg);
         return;
