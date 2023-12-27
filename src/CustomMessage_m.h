@@ -63,10 +63,10 @@
  * </pre>
  */
 
-#define COORDINATOR_FRAME 3
-#define DATA_FRAME 2
-#define ACK_FRAME 1
 #define NACK_FRAME 0
+#define ACK_FRAME 1
+#define DATA_FRAME 2
+#define COORDINATOR_FRAME 3
 
 class CustomMessage_Base : public ::omnetpp::cPacket
 {

@@ -23,9 +23,39 @@
 typedef std::bitset<8> bitset8;
 typedef std::vector<bitset8> vecBitset8;
 
+// Singly-linked list node for buffered text lines.
+struct TextLine {
+
+    std::string line;
+
+    // The number of the text line in the file.
+    int N;
+
+    TextLine* next = NULL;
+};
+
+// Result struct for TextFile::ReadNthLine
+// moreLinesToRead => Whether there was more lines to read from the text file.
+// readFromBuffer  => Whether the read line was read from the buffered lines, or from disk.
+struct ReadLineResult {
+    bool moreLinesToRead = true;
+    bool readFromBuffer = false;
+    ReadLineResult(bool moreLinesToRead, bool readFromBuffer) : moreLinesToRead(moreLinesToRead), readFromBuffer(readFromBuffer) {}
+};
+
+template <typename T>
+struct linkedList {
+    T* start = NULL;
+    T* end = NULL;
+    int size = -1;
+    int availSpace = -1;
+};
+
 class Info {
 public:
     Info() = delete;
+
+    // All the parameters set in the Newtork.
     static int windowSize;
     static double timeout;
     static double processingTime;
@@ -34,26 +64,41 @@ public:
     static double duplicationDelay;
     static double ackLossProb;
 
+    // The log file shared between sender and receiver `output.txt`
     static std::ofstream log;
 };
 
+// Based on: https://stackoverflow.com/a/7273804
 class TextFile {
     std::string fileName;
     std::ifstream file_stream;
+    linkedList<TextLine> bufferedLines;
 public:
     std::vector<std::ifstream::streampos> lineBeginnings;
     TextFile();
     TextFile(std::string fileName);
     TextFile(TextFile&& b);
-    bool ReadNthLine(int N, std::string &s);
+    ReadLineResult ReadNthLine(int N, std::string &s);
+    void SetBufferSize(int bufferSize);
     void OpenFile();
     virtual ~TextFile();
 };
 
 
+// Conversion from string to bitsets, and vice versa.
+// Optional framing/deframing of messages.
 vecBitset8 ConvertStringToBits(std::string const& message, bool frame = false);
 std::string ConvertBitsToString(vecBitset8 const& bytes, bool deframe = false);
+
+// Calculation and verification of checksums.
 bool VerifyChecksum(vecBitset8 const &bytes, bitset8 const& checksum);
 bitset8 CalculateChecksum(vecBitset8 const &bytes);
+
+// Insertion, deletion, and retrieval of elements in a singly-linked list, optionally with size-constrained.
+// Despite being generic, only currently used in TextFile.
+// I also realize now I could've just used a ready one from stl
+template<typename T, typename N> void InsertAtEndOfLinkedList(linkedList<T>* l);
+template<typename T, typename N> T* GetElementFromLinkedList(linkedList<T>* l, N i);
+template<typename T, typename N> void DeleteElementFromLinkedList(linkedList<T>* l, N i);
 
 #endif /* UTIL_H_ */

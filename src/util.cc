@@ -26,7 +26,6 @@ double Info::duplicationDelay = 0;
 double Info::ackLossProb = 0;
 std::ofstream Info::log;
 
-
 TextFile::TextFile(std::string fileName) : fileName(fileName)
 {
 }
@@ -44,16 +43,36 @@ void TextFile::OpenFile()  {
         lineBeginnings.push_back(file_stream.tellg());
     }
 }
+void TextFile::SetBufferSize(int bufferSize) {
+    this->bufferedLines.availSpace = this->bufferedLines.size = bufferSize;
+}
+ReadLineResult TextFile::ReadNthLine(int N, std::string &s) {
 
-bool TextFile::ReadNthLine(int N, std::string &s) {
-    if (N >= lineBeginnings.size()-1)
-        return false;
+    if (N >= lineBeginnings.size() - 1) return ReadLineResult{false, false};
 
     // Clear EOF and error flags
     this->file_stream.clear();
     this->file_stream.seekg(lineBeginnings[N]);
-    std::getline(this->file_stream, s);
-    return true;
+
+    bool isBuffered = false;
+    if (this->bufferedLines.start)
+        if (N >= this->bufferedLines.start->N && N <= this->bufferedLines.end->N)
+           isBuffered = true;
+
+    if (isBuffered) {
+        TextLine *t = GetElementFromLinkedList<TextLine, int>(&this->bufferedLines, N);
+        s = t->line;
+    } else {
+
+        InsertAtEndOfLinkedList<TextLine, int>(&this->bufferedLines);
+
+        this->bufferedLines.end->N = N;
+        std::getline(this->file_stream, this->bufferedLines.end->line);
+        this->bufferedLines.end->line = this->bufferedLines.end->line.substr(0, this->bufferedLines.end->line.length() - 1); // Excluding new line
+        s = this->bufferedLines.end->line;
+    }
+
+    return ReadLineResult{true, isBuffered};
 }
 
 TextFile::TextFile() {
@@ -123,5 +142,47 @@ bitset8 CalculateChecksum(vecBitset8 const &bytes) {
 
     result = ~result;
     return result;
+}
+
+template<typename T, typename N> void DeleteElementFromLinkedList(linkedList<T>* l, N i) {
+    for (auto it = l->start; it; it = it->next) {
+        if (it->N == i) {
+
+            T* toDelete = it;
+
+            if (it == l->start) l->start = l->start->next;
+            if (it == l->end) l->end = l->end->next;
+            delete toDelete;
+
+            if (l->size != -1) l->availSpace += 1;
+            return;
+        }
+    }
+}
+
+template<typename T, typename N> void InsertAtEndOfLinkedList(linkedList<T>* l) {
+
+    if (l->size != -1) {
+        // Deleting the oldest element in the list if there is no free space.
+        if (l->availSpace == 0) DeleteElementFromLinkedList<T, N>(l, l->start->N);
+        l->availSpace -= 1;
+    }
+
+    // Inserting the new element at the end.
+    if (!l->start) l->start = l->end = new T();
+    else {
+        l->end->next = new T();
+        l->end = l->end->next;
+    }
+}
+
+template<typename T, typename N> T* GetElementFromLinkedList(linkedList<T>* l, N i) {
+
+    for (auto it = l->start; it; it = it->next) {
+        if (it->N == i)
+            return it;
+    }
+
+    return NULL;
 }
 
