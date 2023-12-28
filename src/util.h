@@ -32,6 +32,8 @@ struct TextLine {
     int N;
 
     TextLine* next = NULL;
+    TextLine* prev = NULL;
+
 };
 
 // Result struct for TextFile::ReadNthLine
@@ -97,8 +99,49 @@ bitset8 CalculateChecksum(vecBitset8 const &bytes);
 // Insertion, deletion, and retrieval of elements in a singly-linked list, optionally with size-constrained.
 // Despite being generic, only currently used in TextFile.
 // I also realize now I could've just used a ready one from stl
-template<typename T, typename N> void InsertAtEndOfLinkedList(linkedList<T>* l);
-template<typename T, typename N> T* GetElementFromLinkedList(linkedList<T>* l, N i);
-template<typename T, typename N> void DeleteElementFromLinkedList(linkedList<T>* l, N i);
+template<typename T, typename N> void DeleteElementFromLinkedList(linkedList<T>* l, N i) {
+    for (T* it = l->start; it; it = it->next) {
+        if (it->N == i) {
+
+            if (it->next) it->next->prev = it->prev;
+            if (it->prev) it->prev->next = it->next;
+
+            if (it == l->start) l->start = l->start->next;
+            if (it == l->end) l->end = (it->prev) ? it->prev : NULL;
+
+            if (l->size != -1) l->availSpace += 1;
+
+            delete it;
+            return;
+        }
+    }
+}
+
+template<typename T, typename N> void InsertAtEndOfLinkedList(linkedList<T>* l) {
+
+    if (l->size != -1) {
+        // Deleting the oldest element in the list if there is no free space.
+        if (l->availSpace == 0) DeleteElementFromLinkedList<T, N>(l, l->start->N);
+        l->availSpace -= 1;
+    }
+
+    // Inserting the new element at the end.
+    if (!l->start) l->start = l->end = new T();
+    else {
+        T* oldEnd = l->end;
+        l->end->next = new T();
+        l->end = l->end->next;
+        l->end->prev = oldEnd;
+    }
+}
+
+template<typename T, typename N> T* GetElementFromLinkedList(linkedList<T>* l, N i) {
+
+    for (T* it = l->start; it; it = it->next)
+        if (it->N == i) return it;
+
+    return NULL;
+}
+
 
 #endif /* UTIL_H_ */

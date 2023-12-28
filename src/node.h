@@ -29,6 +29,16 @@ struct Timer {
     Timer* prev = NULL;
 };
 
+struct DelayedMessage {
+    CustomMessage_Base* N = NULL;
+    double simTime = 0;
+    double realTime = 0;
+    DelayedMessage* next = NULL;
+    DelayedMessage* prev = NULL;
+    bool lost = false;
+    double extraDelay = 0;
+};
+
 struct SenderInfo {
 
     // Sequence number of the start of the window.
@@ -48,37 +58,7 @@ struct SenderInfo {
     // This is a vector of self-messages, acting as timeouts.
     Timer* timers = NULL;
 
-
-    // Ad-hoc solution coming your way..
-
-    // Used to calculate the right time to schedule messages.
-    // Specifically, consider the following example, with the following parameters:
-    // simTime() = 0, Info::windowSize = 3, Info::processingTime = 0.5
-
-    // The sender sends:
-    // First frame:
-    // Sent at = simTime() + Info::processingTime = 0 + 0.5 = 0.5
-    // Given that the sender doesn't either: busy-wait, or schedules a self-message,
-    // it will proceed to the next frame
-
-    // Second frame:
-    // Sent at = simTime() + Info::processingTime = 0 + 0.5 = 0.5 => Not accurate
-
-    // Which is the same as the time for the first frame, because it didn't
-    // account for the time supposedly spent processing the frame.
-    // We fix this by accumulating the processing times in offsetFromRealTime
-    // so the way it goes:
-
-    // First frame:
-    // Sent at = simTime() + offsetFromRealTime + Info::processingTime = 0 + 0 + 0.5 = 0.5
-    // offsetFromRealTime = offsetFromRealTime + Info::processingTime = 0 + 0.5 = 0.5
-
-    // Second frame:
-    // Sent at = simTime() + offsetFromRealTime + Info::processingTime = 0 + 0.5 + 0.5 = 1 => Accurate
-    // offsetFromRealTime = offsetFromRealTime + Info::processingTime = 0.5 + 0.5 = 1
-
-    // After sending all the frames our window can accomodate, we zero out this offsetFromRealTime.
-    float offsetFromRealTime = 0;
+    linkedList<DelayedMessage> delayedMessages;
 };
 
 struct ReceiverInfo {
@@ -86,15 +66,7 @@ struct ReceiverInfo {
     // The next expected frame sequence.
     int expectedFrameSequence = 0;
 
-    // This serves a roughly similar role to senderInfo.offsetFromRealTime described above.
-    // Specifically in the case when the senders send multiple frames at the same time t.
-    // This happens when those frames are being resent, either due to a timeout or an NACK,
-    // thus no processing time at the sender's end.
-
-    // All the frames would thus be received at the same time t`. If we didn't handle it,
-    // all the ack frames would be sent at (t` + 0.5), which is not logical.
-    float lastAckSimTime = -1.0;
-    float accumulatingProcessingTimes = 0.0;
+    linkedList<DelayedMessage> delayedMessages;
 };
 
 class Node : public cSimpleModule
@@ -122,7 +94,7 @@ class Node : public cSimpleModule
     // calculates the delay and returns it in the parameter delay.
     // Returns true if there was more lines to read from the file, and a frame was successfully sent,
     // false otherwise.
-    virtual bool sendDataFrame(int lineNumber, int dataSequenceNumber, bool errorFree, float &delay);
+    virtual bool sendDataFrame(int lineNumber, int dataSequenceNumber, bool errorFree, float &realTime, bool timeout);
 
     // Sends an ACK/NACK, applying the ack loss probability if LP = true
     //
@@ -152,6 +124,9 @@ class Node : public cSimpleModule
     // Logs the given printf-style string and format to omnte++ simulation stdout,
     // and the log file `output.txt`
     template<typename... Args> void log(const char * f, Args... args);
+
+    virtual double insertIntoDelayed(linkedList<DelayedMessage> *l, CustomMessage_Base* msg, bool lost, double processingTime, double extraDelay=0);
+    virtual double getRealTime(linkedList<DelayedMessage> *l);
   private:
 
     // The id of the node.

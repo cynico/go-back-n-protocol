@@ -68,6 +68,13 @@
 #define DATA_FRAME 2
 #define COORDINATOR_FRAME 3
 
+#define DELAY_OFFSET 4
+
+#define DELAYED_NACK_FRAME NACK_FRAME + DELAY_OFFSET
+#define DELAYED_ACK_FRAME ACK_FRAME + DELAY_OFFSET
+#define DELAYED_DATA_FRAME DATA_FRAME + DELAY_OFFSET
+
+
 class CustomMessage_Base : public ::omnetpp::cPacket
 {
   protected:

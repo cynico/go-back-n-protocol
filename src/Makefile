@@ -1,12 +1,12 @@
 #
-# OMNeT++/OMNEST Makefile for projcet
+# OMNeT++/OMNEST Makefile for project
 #
 # This file was generated with the command:
 #  opp_makemake -f --deep
 #
 
 # Name of target to be created (-o option)
-TARGET = projcet$(D)$(EXE_SUFFIX)
+TARGET = project$(D)$(EXE_SUFFIX)
 TARGET_DIR = .
 
 # User interface (uncomment one) (-u option)
